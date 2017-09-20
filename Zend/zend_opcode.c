@@ -142,54 +142,28 @@ ZEND_API void zend_function_dtor(zval *zv)
 		ZEND_ASSERT(function->type == ZEND_INTERNAL_FUNCTION);
 		ZEND_ASSERT(function->common.function_name);
 		zend_string_release(function->common.function_name);
+#ifndef ZTS
+		if ((function->common.fn_flags & (ZEND_ACC_HAS_RETURN_TYPE|ZEND_ACC_HAS_TYPE_HINTS)) &&
+		    !function->common.scope && function->common.arg_info) {
+
+			uint32_t i;
+			uint32_t num_args = function->common.num_args + 1;
+			zend_arg_info *arg_info = function->common.arg_info - 1;
+
+			if (function->common.fn_flags & ZEND_ACC_VARIADIC) {
+				num_args++;
+			}
+			for (i = 0 ; i < num_args; i++) {
+				if (ZEND_TYPE_IS_CLASS(arg_info[i].type)) {
+					zend_string_release(ZEND_TYPE_NAME(arg_info[i].type));
+				}
+			}
+			free(arg_info);
+		}
+#endif
 		if (!(function->common.fn_flags & ZEND_ACC_ARENA_ALLOCATED)) {
 			pefree(function, 1);
 		}
-	}
-}
-
-ZEND_API void zend_cleanup_op_array_data(zend_op_array *op_array)
-{
-	if (op_array->static_variables &&
-	    !(GC_FLAGS(op_array->static_variables) & IS_ARRAY_IMMUTABLE)
-	) {
-		/* The static variables are initially shared when inheriting methods and will
-		 * be separated on first use. If they are never used, they stay shared. Cleaning
-		 * a shared static variables table is safe, as the intention is to clean all
-		 * such tables. */
-		HT_ALLOW_COW_VIOLATION(op_array->static_variables);
-
-		zend_hash_clean(op_array->static_variables);
-	}
-}
-
-ZEND_API void zend_cleanup_user_class_data(zend_class_entry *ce)
-{
-	/* Clean all parts that can contain run-time data */
-	/* Note that only run-time accessed data need to be cleaned up, pre-defined data can
-	   not contain objects and thus are not probelmatic */
-	if (ce->ce_flags & ZEND_HAS_STATIC_IN_METHODS) {
-		zend_function *func;
-
-		ZEND_HASH_FOREACH_PTR(&ce->function_table, func) {
-			if (func->type == ZEND_USER_FUNCTION) {
-				zend_cleanup_op_array_data((zend_op_array *) func);
-			}
-		} ZEND_HASH_FOREACH_END();
-	}
-	if (ce->static_members_table) {
-		zval *static_members = ce->static_members_table;
-		zval *p = static_members;
-		zval *end = p + ce->default_static_members_count;
-
-
-		ce->default_static_members_count = 0;
-		ce->default_static_members_table = ce->static_members_table = NULL;
-		while (p != end) {
-			i_zval_ptr_dtor(p ZEND_FILE_LINE_CC);
-			p++;
-		}
-		efree(static_members);
 	}
 }
 
@@ -272,6 +246,9 @@ ZEND_API void destroy_zend_class(zval *zv)
 {
 	zend_property_info *prop_info;
 	zend_class_entry *ce = Z_PTR_P(zv);
+#ifndef ZTS
+	zend_function *fn;
+#endif
 
 	if (--ce->refcount > 0) {
 		return;
@@ -355,6 +332,15 @@ ZEND_API void destroy_zend_class(zval *zv)
 			}
 			zend_hash_destroy(&ce->properties_info);
 			zend_string_release(ce->name);
+#ifndef ZTS
+			ZEND_HASH_FOREACH_PTR(&ce->function_table, fn) {
+				if ((fn->common.fn_flags & (ZEND_ACC_HAS_RETURN_TYPE|ZEND_ACC_HAS_TYPE_HINTS)) &&
+				    fn->common.scope == ce) {
+					/* reset function scope to allow arg_info removing */
+					fn->common.scope = NULL;
+				}
+			} ZEND_HASH_FOREACH_END();
+#endif
 			zend_hash_destroy(&ce->function_table);
 			if (zend_hash_num_elements(&ce->constants_table)) {
 				zend_class_constant *c;
@@ -740,6 +726,7 @@ ZEND_API binary_op_type get_binary_op(int opcode)
 		case ZEND_ASSIGN_MUL:
 			return (binary_op_type) mul_function;
 		case ZEND_POW:
+		case ZEND_ASSIGN_POW:
 			return (binary_op_type) pow_function;
 		case ZEND_DIV:
 		case ZEND_ASSIGN_DIV:
@@ -762,6 +749,7 @@ ZEND_API binary_op_type get_binary_op(int opcode)
 		case ZEND_IS_NOT_IDENTICAL:
 			return (binary_op_type) is_not_identical_function;
 		case ZEND_IS_EQUAL:
+		case ZEND_CASE:
 			return (binary_op_type) is_equal_function;
 		case ZEND_IS_NOT_EQUAL:
 			return (binary_op_type) is_not_equal_function;
@@ -793,4 +781,6 @@ ZEND_API binary_op_type get_binary_op(int opcode)
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */

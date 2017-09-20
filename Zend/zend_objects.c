@@ -76,7 +76,7 @@ ZEND_API void zend_object_std_dtor(zend_object *object)
 
 ZEND_API void zend_objects_destroy_object(zend_object *object)
 {
-	zend_function *destructor = object ? object->ce->destructor : NULL;
+	zend_function *destructor = object->ce->destructor;
 
 	if (destructor) {
 		zend_object *old_exception;
@@ -197,8 +197,7 @@ ZEND_API void zend_objects_clone_members(zend_object *new_object, zend_object *o
 		zend_string *key;
 
 		if (!new_object->properties) {
-			ALLOC_HASHTABLE(new_object->properties);
-			zend_hash_init(new_object->properties, zend_hash_num_elements(old_object->properties), NULL, ZVAL_PTR_DTOR, 0);
+			new_object->properties = zend_new_array(zend_hash_num_elements(old_object->properties));
 			zend_hash_real_init(new_object->properties, 0);
 		} else {
 			zend_hash_extend(new_object->properties, new_object->properties->nNumUsed + zend_hash_num_elements(old_object->properties), 0);
@@ -263,4 +262,6 @@ ZEND_API zend_object *zend_objects_clone_obj(zval *zobject)
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */

@@ -658,7 +658,7 @@ ZEND_API ZEND_INI_MH(OnUpdateLong) /* {{{ */
 
 	p = (zend_long *) (base+(size_t) mh_arg1);
 
-	*p = zend_atol(ZSTR_VAL(new_value), (int)ZSTR_LEN(new_value));
+	*p = zend_atol(ZSTR_VAL(new_value), ZSTR_LEN(new_value));
 	return SUCCESS;
 }
 /* }}} */
@@ -674,7 +674,7 @@ ZEND_API ZEND_INI_MH(OnUpdateLongGEZero) /* {{{ */
 	base = (char *) ts_resource(*((int *) mh_arg2));
 #endif
 
-	tmp = zend_atol(ZSTR_VAL(new_value), (int)ZSTR_LEN(new_value));
+	tmp = zend_atol(ZSTR_VAL(new_value), ZSTR_LEN(new_value));
 	if (tmp < 0) {
 		return FAILURE;
 	}
@@ -750,4 +750,6 @@ ZEND_API ZEND_INI_MH(OnUpdateStringUnempty) /* {{{ */
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */

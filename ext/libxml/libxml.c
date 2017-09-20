@@ -224,7 +224,7 @@ static void php_libxml_node_free(xmlNodePtr node)
 	}
 }
 
-static void php_libxml_node_free_list(xmlNodePtr node)
+PHP_LIBXML_API void php_libxml_node_free_list(xmlNodePtr node)
 {
 	xmlNodePtr curnode;
 
@@ -1042,9 +1042,7 @@ static PHP_FUNCTION(libxml_get_errors)
 
 	xmlErrorPtr error;
 
-	if (array_init(return_value) == FAILURE) {
-		RETURN_FALSE;
-	}
+	array_init(return_value);
 
 	if (LIBXML(error_list)) {
 

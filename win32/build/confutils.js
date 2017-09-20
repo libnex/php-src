@@ -46,7 +46,8 @@ var PHP_TEST_INI_EXT_EXCLUDE = "";
 
 var PHP_MAKEFILE_FRAGMENTS = PHP_SRC_DIR + "\\Makefile.fragments.w32";
 
-/* Care also about NTDDI_VERSION and _WIN32_WINNT in config.w32.h.in */
+/* Care also about NTDDI_VERSION and _WIN32_WINNT in config.w32.h.in 
+   and manifest. */
 var WINVER = "0x0601"; /* 7/2008r2 */
 
 // There's a minimum requirement for re2c..
@@ -61,18 +62,23 @@ var sapi_enabled = new Array();
 /* Store the headers to install */
 var headers_install = new Array();
 
+/* Store unknown configure options */
+var INVALID_CONFIG_ARGS = new Array();
+
 /* Mapping CL version > human readable name */
 var VC_VERSIONS = new Array();
 VC_VERSIONS[1700] = 'MSVC11 (Visual C++ 2012)';
 VC_VERSIONS[1800] = 'MSVC12 (Visual C++ 2013)';
 VC_VERSIONS[1900] = 'MSVC14 (Visual C++ 2015)';
 VC_VERSIONS[1910] = 'MSVC15 (Visual C++ 2017)';
+VC_VERSIONS[1911] = 'MSVC15 (Visual C++ 2017)';
 
 var VC_VERSIONS_SHORT = new Array();
 VC_VERSIONS_SHORT[1700] = 'VC11';
 VC_VERSIONS_SHORT[1800] = 'VC12';
 VC_VERSIONS_SHORT[1900] = 'VC14';
 VC_VERSIONS_SHORT[1910] = 'VC15';
+VC_VERSIONS_SHORT[1911] = 'VC15';
 
 if (PROGRAM_FILES == null) {
 	PROGRAM_FILES = "C:\\Program Files";
@@ -98,10 +104,10 @@ if (typeof(CWD) == "undefined") {
 
 /* defaults; we pick up the precise versions from configure.ac */
 var PHP_VERSION = 7;
-var PHP_MINOR_VERSION = 1;
+var PHP_MINOR_VERSION = 3;
 var PHP_RELEASE_VERSION = 0;
 var PHP_EXTRA_VERSION = "";
-var PHP_VERSION_STRING = "7.2.0";
+var PHP_VERSION_STRING = "7.3.0";
 
 /* Get version numbers and DEFINE as a string */
 function get_version_numbers()
@@ -399,9 +405,13 @@ function conf_process_args()
 			}
 		}
 		if (!found) {
-			STDERR.WriteLine("Unknown option " + argname + "; please try configure.js --help for a list of valid options");
-			WScript.Quit(2);
+			INVALID_CONFIG_ARGS[INVALID_CONFIG_ARGS.length] = argname;
 		}
+	}
+
+	if (PHP_SNAPSHOT_BUILD != 'no' && INVALID_CONFIG_ARGS.length) {
+		STDERR.WriteLine('Unknown option ' + INVALID_CONFIG_ARGS[0] + '; please try configure.js --help for a list of valid options');
+		WScript.Quit(2);
 	}
 
 	if (configure_help_mode) {
@@ -1220,17 +1230,14 @@ function SAPI(sapiname, file_list, makefiletarget, cflags, obj_dir)
 		// Add compiler and link flags if PGO options are selected
 		if (PHP_DEBUG != "yes" && PHP_PGI == "yes") {
 			ADD_FLAG('CFLAGS_' + SAPI, "/GL /O2");
-			ADD_FLAG('LDFLAGS_' + SAPI, "/LTCG:PGINSTRUMENT");
+			ADD_FLAG('LDFLAGS_' + SAPI, "/LTCG /GENPROFILE");
 		}
 		else if (PHP_DEBUG != "yes" && PHP_PGO != "no") {
 			ADD_FLAG('CFLAGS_' + SAPI, "/GL /O2");
-			ADD_FLAG('LDFLAGS_' + SAPI, "/LTCG:PGUPDATE");
+			ADD_FLAG('LDFLAGS_' + SAPI, "/LTCG /USEPROFILE");
 		}
 
 		ldflags += " /PGD:$(PGOPGD_DIR)\\" + makefiletarget.substring(0, makefiletarget.indexOf(".")) + ".pgd";
-	} else if (PHP_DEBUG != "yes") {
-		ADD_FLAG('CFLAGS_' + SAPI, "/GL");
-		ADD_FLAG('LDFLAGS_' + SAPI, "/LTCG:INCREMENTAL");
 	}
 
 	if (MODE_PHPIZE) {
@@ -1422,18 +1429,15 @@ function EXTENSION(extname, file_list, shared, cflags, dllname, obj_dir)
 		if (is_pgo_desired(extname) && (PHP_PGI == "yes" || PHP_PGO != "no")) {
 			// Add compiler and link flags if PGO options are selected
 			if (PHP_DEBUG != "yes" && PHP_PGI == "yes") {
-				ADD_FLAG('LDFLAGS_' + EXT, "/LTCG:PGINSTRUMENT");
+				ADD_FLAG('LDFLAGS_' + EXT, "/LTCG /GENPROFILE");
 			}
 			else if (PHP_DEBUG != "yes" && PHP_PGO != "no") {
-				ADD_FLAG('LDFLAGS_' + EXT, "/LTCG:PGUPDATE");
+				ADD_FLAG('LDFLAGS_' + EXT, "/LTCG /USEPROFILE");
 			}
 
 			ADD_FLAG('CFLAGS_' + EXT, "/GL /O2");
 
 			ldflags = " /PGD:$(PGOPGD_DIR)\\" + dllname.substring(0, dllname.indexOf(".")) + ".pgd";
-		} else if (PHP_DEBUG != "yes") {
-			ADD_FLAG('CFLAGS_' + EXT, "/GL");
-			ADD_FLAG('LDFLAGS_' + EXT, "/LTCG:INCREMENTAL");
 		}
 
 		MFO.WriteLine("$(BUILD_DIR)\\" + libname + ": $(BUILD_DIR)\\" + dllname);
@@ -1476,9 +1480,6 @@ function EXTENSION(extname, file_list, shared, cflags, dllname, obj_dir)
 				ADD_FLAG("STATIC_EXT_CFLAGS", "/GL /O2");
 				static_pgo_enabled = true;
 			}
-		} else if (PHP_DEBUG != "yes") {
-			ADD_FLAG("STATIC_EXT_CFLAGS", "/GL");
-			ADD_FLAG('STATIC_EXT_LDFLAGS', "/LTCG:INCREMENTAL");
 		}
 
 		/* find the header that declares the module pointer,
@@ -1691,7 +1692,7 @@ function ADD_SOURCES(dir, file_list, target, obj_dir)
 				MFO.WriteLine("\t@$(CC) $(" + flags + ") $(CFLAGS) $(" + bd_flags_name + ") /c " + dir + "\\" + src + " /Fo" + sub_build + d + obj);
 
 				if ("clang" == PHP_ANALYZER) {
-					MFO.WriteLine("\t\"@$(CLANG_CL)\" " + analyzer_base_args + " $(" + flags + "_ANALYZER) $(CFLAGS_ANALYZER) $(" + bd_flags_name + "_ANALYZER) " + dir + "\\" + src); 
+					MFO.WriteLine("\t@\"$(CLANG_CL)\" " + analyzer_base_args + " $(" + flags + "_ANALYZER) $(CFLAGS_ANALYZER) $(" + bd_flags_name + "_ANALYZER) " + dir + "\\" + src); 
 				} else if ("cppcheck" == PHP_ANALYZER) {
 					MFO.WriteLine("\t\"@$(CPPCHECK)\" " + analyzer_base_args + " $(" + flags + "_ANALYZER) $(CFLAGS_ANALYZER) $(" + bd_flags_name + "_ANALYZER) " + analyzer_base_flags + " " + dir + "\\" + src); 
 				}else if (PHP_ANALYZER == "pvs") {
@@ -2012,6 +2013,17 @@ function generate_files()
 	STDOUT.WriteBlankLines(1);
 	write_summary();
 
+	if (INVALID_CONFIG_ARGS.length) {
+		STDOUT.WriteLine('WARNING');
+		STDOUT.WriteLine('The following arguments is invalid, and therefore ignored:');
+
+		for (var i = 0; i < INVALID_CONFIG_ARGS.length; ++i) {
+			STDOUT.WriteLine(' ' + INVALID_CONFIG_ARGS[i]);
+		}
+
+		STDOUT.WriteBlankLines(2);
+	}
+
 	if (PHP_SNAPSHOT_BUILD != "no") {
 		STDOUT.WriteLine("Type 'nmake snap' to build a PHP snapshot");
 	} else {
@@ -2271,6 +2283,7 @@ function generate_phpize()
 	CJ.WriteLine("var PHP_DEBUG=" + '"' + PHP_DEBUG + '"');
 	CJ.WriteLine("var PHP_DLL_LIB =" + '"' + get_define('PHPLIB') + '"');
 	CJ.WriteLine("var PHP_DLL =" + '"' + get_define('PHPDLL') + '"');
+	CJ.WriteLine("var PHP_SECURITY_FLAGS =" + '"' + PHP_SECURITY_FLAGS + '"');
 
 	/* The corresponding configure options aren't enabled through phpize,
 		thus these dummy declarations are required. */
@@ -2500,6 +2513,11 @@ function generate_makefile()
 	}
 	MF.WriteLine("set-tmp-env:");
 	MF.WriteLine("	@set PATH=" + extra_path + ";$(PATH)");
+
+	MF.WriteBlankLines(2);
+
+	MF.WriteLine("dump-tmp-env: set-tmp-env");
+	MF.WriteLine("	@set");
 
 	MF.WriteBlankLines(2);
 
@@ -3389,7 +3407,7 @@ function check_binary_tools_sdk()
 
 	/* Basic test, extend by need. */
 	if (BIN_TOOLS_SDK_VER_MAJOR < 2) {
-		ERROR("Incompatible binary tools version. Please consult https://wiki.php.net/internals/windows/stepbystepbuild_sdk_2");
+		ERROR("Incompatible binary tools version. Please consult\r\nhttps://wiki.php.net/internals/windows/stepbystepbuild_sdk_2");
 	}
 }
 

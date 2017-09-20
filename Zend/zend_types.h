@@ -721,8 +721,9 @@ static zend_always_inline zend_uchar zval_get_type(const zval* pz) {
 	} while (0)
 
 #define ZVAL_ARR(z, a) do {						\
+		zend_array *__arr = (a);				\
 		zval *__z = (z);						\
-		Z_ARR_P(__z) = (a);						\
+		Z_ARR_P(__z) = __arr;					\
 		Z_TYPE_INFO_P(__z) = IS_ARRAY_EX;		\
 	} while (0)
 
@@ -982,11 +983,11 @@ static zend_always_inline uint32_t zval_delref_p(zval* pz) {
 
 #define ZVAL_COPY_UNREF(z, v) do {						\
 		zval *_z3 = (v);								\
-		if (Z_REFCOUNTED_P(_z3)) {						\
-			if (UNEXPECTED(Z_ISREF_P(_z3))				\
+		if (Z_OPT_REFCOUNTED_P(_z3)) {					\
+			if (UNEXPECTED(Z_OPT_ISREF_P(_z3))			\
 			 && UNEXPECTED(Z_REFCOUNT_P(_z3) == 1)) {	\
 				ZVAL_UNREF(_z3);						\
-				if (Z_REFCOUNTED_P(_z3)) {				\
+				if (Z_OPT_REFCOUNTED_P(_z3)) {			\
 					Z_ADDREF_P(_z3);					\
 				}										\
 			} else {									\
@@ -1076,4 +1077,6 @@ static zend_always_inline uint32_t zval_delref_p(zval* pz) {
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */

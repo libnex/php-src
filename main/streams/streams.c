@@ -405,10 +405,9 @@ PHPAPI int _php_stream_free(php_stream *stream, int close_options) /* {{{ */
 		php_stream *enclosing_stream = stream->enclosing_stream;
 		stream->enclosing_stream = NULL;
 		/* we force PHP_STREAM_CALL_DTOR because that's from where the
-		 * enclosing stream can free this stream. We remove rsrc_dtor because
-		 * we want the enclosing stream to be deleted from the resource list */
+		 * enclosing stream can free this stream. */
 		return php_stream_free(enclosing_stream,
-			(close_options | PHP_STREAM_FREE_CALL_DTOR) & ~PHP_STREAM_FREE_RSRC_DTOR);
+			(close_options | PHP_STREAM_FREE_CALL_DTOR | PHP_STREAM_FREE_KEEP_RSRC) & ~PHP_STREAM_FREE_RSRC_DTOR);
 	}
 
 	/* if we are releasing the stream only (and preserving the underlying handle),
@@ -502,43 +501,13 @@ fprintf(stderr, "stream_free: %s:%p[%s] preserve_handle=%d release_cast=%d remov
 			/* we don't work with *stream but need its value for comparison */
 			zend_hash_apply_with_argument(&EG(persistent_list), _php_stream_free_persistent, stream);
 		}
-#if ZEND_DEBUG
-		if ((close_options & PHP_STREAM_FREE_RSRC_DTOR) && (stream->__exposed == 0) && (EG(error_reporting) & E_WARNING)) {
-			/* it leaked: Lets deliberately NOT pefree it so that the memory manager shows it
-			 * as leaked; it will log a warning, but lets help it out and display what kind
-			 * of stream it was. */
-			if (!CG(unclean_shutdown)) {
-				char *leakinfo;
-				spprintf(&leakinfo, 0, __FILE__ "(%d) : Stream of type '%s' %p (path:%s) was not closed\n", __LINE__, stream->ops->label, stream, stream->orig_path);
 
-				if (stream->orig_path) {
-					pefree(stream->orig_path, stream->is_persistent);
-					stream->orig_path = NULL;
-				}
-
-# if defined(PHP_WIN32)
-				OutputDebugString(leakinfo);
-# else
-				fprintf(stderr, "%s", leakinfo);
-# endif
-				efree(leakinfo);
-			}
-		} else {
-			if (stream->orig_path) {
-				pefree(stream->orig_path, stream->is_persistent);
-				stream->orig_path = NULL;
-			}
-
-			pefree(stream, stream->is_persistent);
-		}
-#else
 		if (stream->orig_path) {
 			pefree(stream->orig_path, stream->is_persistent);
 			stream->orig_path = NULL;
 		}
 
 		pefree(stream, stream->is_persistent);
-#endif
 	}
 
 	if (context) {
@@ -2027,7 +1996,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 	}
 
 	if (options & USE_PATH) {
-		resolved_path = zend_resolve_path(path, (int)strlen(path));
+		resolved_path = zend_resolve_path(path, strlen(path));
 		if (resolved_path) {
 			path = ZSTR_VAL(resolved_path);
 			/* we've found this file, don't re-check include_path or run realpath */

@@ -409,6 +409,9 @@ struct _zend_op_array {
 #define ZEND_RETURN_VALUE				0
 #define ZEND_RETURN_REFERENCE			1
 
+/* zend_internal_function_handler */
+typedef void (*zif_handler)(INTERNAL_FUNCTION_PARAMETERS);
+
 typedef struct _zend_internal_function {
 	/* Common elements */
 	zend_uchar type;
@@ -422,7 +425,7 @@ typedef struct _zend_internal_function {
 	zend_internal_arg_info *arg_info;
 	/* END of common elements */
 
-	void (*handler)(INTERNAL_FUNCTION_PARAMETERS);
+	zif_handler handler;
 	struct _zend_module_entry *module;
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 } zend_internal_function;
@@ -776,12 +779,8 @@ ZEND_API int open_file_for_scanning(zend_file_handle *file_handle);
 ZEND_API void init_op_array(zend_op_array *op_array, zend_uchar type, int initial_ops_size);
 ZEND_API void destroy_op_array(zend_op_array *op_array);
 ZEND_API void zend_destroy_file_handle(zend_file_handle *file_handle);
-ZEND_API void zend_cleanup_user_class_data(zend_class_entry *ce);
 ZEND_API void zend_cleanup_internal_class_data(zend_class_entry *ce);
 ZEND_API void zend_cleanup_internal_classes(void);
-ZEND_API void zend_cleanup_op_array_data(zend_op_array *op_array);
-ZEND_API int clean_non_persistent_function_full(zval *zv);
-ZEND_API int clean_non_persistent_class_full(zval *zv);
 
 ZEND_API void destroy_zend_function(zend_function *function);
 ZEND_API void zend_function_dtor(zval *zv);
@@ -907,7 +906,6 @@ void zend_assert_valid_class_name(const zend_string *const_name);
 #define ZEND_ISSET				    0x02000000
 #define ZEND_ISEMPTY			    0x01000000
 #define ZEND_ISSET_ISEMPTY_MASK	    (ZEND_ISSET | ZEND_ISEMPTY)
-#define ZEND_QUICK_SET			    0x00800000
 
 #define ZEND_FETCH_ARG_MASK         0x000fffff
 
@@ -1058,4 +1056,6 @@ ZEND_API zend_bool zend_binary_op_produces_numeric_string_error(uint32_t opcode,
  * c-basic-offset: 4
  * indent-tabs-mode: t
  * End:
+ * vim600: sw=4 ts=4 fdm=marker
+ * vim<600: sw=4 ts=4
  */
